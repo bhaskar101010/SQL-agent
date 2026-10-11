@@ -1,0 +1,40 @@
+# Render.com blueprint. On a new deploy, go to render.com -> New -> Blueprint
+# and point it at this repo. Render reads this file and creates the service.
+# You still need to add the API keys as environment variables in the dashboard
+# (we DO NOT commit them).
+services:
+  - type: web
+    name: sql-agent
+    runtime: docker
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /api/health
+    envVars:
+      - key: GEMINI_API_KEYS
+        sync: false         # set in dashboard
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: GEMINI_STRONG_MODEL
+        value: gemini-2.5-flash
+      - key: GEMINI_CHEAP_MODEL
+        value: gemini-2.5-flash-lite
+      - key: GROQ_STRONG_MODEL
+        value: openai/gpt-oss-120b
+      - key: GROQ_CHEAP_MODEL
+        value: openai/gpt-oss-20b
+      - key: OPENROUTER_STRONG_MODEL
+        value: deepseek/deepseek-chat-v3-0324:free
+      - key: OPENROUTER_CHEAP_MODEL
+        value: google/gemini-2.0-flash-exp:free
+      - key: GEMINI_MIN_INTERVAL
+        value: "7"
+      - key: GROQ_MIN_INTERVAL
+        value: "0"
+      - key: OPENROUTER_MIN_INTERVAL
+        value: "0"
+      - key: LLM_REQUEST_TIMEOUT
+        value: "30"
+      - key: CHINOOK_DB_PATH
+        value: data/Chinook_Sqlite.sqlite

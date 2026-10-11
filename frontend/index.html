@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SQL Query AI Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #161b22;
+    --panel-2: #1f252e;
+    --border: #2a313c;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --accent-2: #388bfd;
+    --good: #3fb950;
+    --warn: #d29922;
+    --bad: #f85149;
+    --radius: 10px;
+    --mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+    --sans: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+  [data-theme="light"] {
+    --bg: #f6f8fa;
+    --panel: #ffffff;
+    --panel-2: #eef1f5;
+    --border: #d0d7de;
+    --text: #1f2328;
+    --muted: #656d76;
+    --accent: #0969da;
+    --accent-2: #0550ae;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    display: grid;
+    grid-template-columns: 1fr 1.1fr;
+    grid-template-rows: 56px 1fr;
+    grid-template-areas:
+      "header header"
+      "chat   workbench";
+    overflow: hidden;
+  }
+  @media (max-width: 900px) {
+    body { grid-template-columns: 1fr; grid-template-areas: "header" "chat" "workbench"; grid-template-rows: 56px 1fr 1fr; }
+  }
+  header {
+    grid-area: header;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px; border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: 0.2px; }
+  header .right { display: flex; gap: 8px; align-items: center; }
+  button, .btn {
+    font: inherit; cursor: pointer; border: 1px solid var(--border);
+    background: var(--panel-2); color: var(--text);
+    padding: 6px 10px; border-radius: 8px; font-size: 13px;
+  }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .pill {
+    font-size: 11px; padding: 2px 8px; border-radius: 999px;
+    background: var(--panel-2); color: var(--muted); border: 1px solid var(--border);
+  }
+
+  /* --- chat column --- */
+  #chat {
+    grid-area: chat;
+    display: flex; flex-direction: column;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+  #messages {
+    flex: 1; overflow-y: auto; padding: 20px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .msg { max-width: 85%; display: flex; flex-direction: column; gap: 4px; }
+  .msg.user { align-self: flex-end; }
+  .msg .bubble {
+    padding: 10px 14px; border-radius: 12px; line-height: 1.5;
+    background: var(--panel); border: 1px solid var(--border);
+    white-space: pre-wrap; word-wrap: break-word;
+  }
+  .msg.user .bubble { background: var(--accent-2); color: #fff; border-color: var(--accent-2); }
+  .msg .meta { font-size: 11px; color: var(--muted); padding: 0 4px; }
+  .msg .meta.err { color: var(--bad); }
+  .msg .meta.warn { color: var(--warn); }
+
+  #composer {
+    display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--border);
+    background: var(--panel);
+  }
+  #composer textarea {
+    flex: 1; resize: none; min-height: 44px; max-height: 180px;
+    padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text);
+    font: inherit; outline: none;
+  }
+  #composer textarea:focus { border-color: var(--accent); }
+  #composer button.send { background: var(--accent-2); color: #fff; border-color: var(--accent-2); }
+
+  /* --- workbench --- */
+  #workbench {
+    grid-area: workbench; display: flex; flex-direction: column;
+    background: var(--panel); overflow: hidden;
+  }
+  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--panel); }
+  .tab { padding: 10px 14px; cursor: pointer; font-size: 13px; color: var(--muted); border: none; background: transparent; border-bottom: 2px solid transparent; }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  .tabpanes { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+  .pane { display: none; flex: 1; overflow: auto; padding: 14px; }
+  .pane.active { display: flex; flex-direction: column; gap: 10px; }
+
+  .section-header { display: flex; align-items: center; justify-content: space-between; }
+  .section-header h3 { margin: 0; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
+  .section-header .actions { display: flex; gap: 6px; }
+
+  pre.sqlbox {
+    margin: 0; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px; overflow: auto; font-family: var(--mono); font-size: 13px;
+  }
+  pre.sqlbox code { font-family: var(--mono); }
+
+  .notes { font-size: 13px; line-height: 1.5; color: var(--text); }
+  .notes ul { margin: 6px 0 0 18px; padding: 0; }
+  .notes code { font-family: var(--mono); font-size: 12px; background: var(--panel-2); padding: 1px 4px; border-radius: 4px; }
+
+  table.results { border-collapse: collapse; width: 100%; font-size: 12.5px; font-family: var(--mono); }
+  table.results th, table.results td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; vertical-align: top; }
+  table.results th { background: var(--panel-2); color: var(--muted); position: sticky; top: 0; }
+  table.results tr:nth-child(even) td { background: color-mix(in oklab, var(--panel-2), transparent 60%); }
+
+  .empty { color: var(--muted); font-size: 13px; padding: 10px 2px; }
+  .status { font-size: 12px; color: var(--muted); }
+  .status.ok   { color: var(--good); }
+  .status.err  { color: var(--bad); }
+  .status.warn { color: var(--warn); }
+
+  .schema-tree { font-family: var(--mono); font-size: 12.5px; line-height: 1.6; }
+  .schema-tree .tbl { color: var(--accent); margin-top: 6px; display: block; }
+  .schema-tree .col { color: var(--text); display: inline-block; margin-right: 10px; }
+  .schema-tree .fk { color: var(--muted); }
+
+  .dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 999px;
+    background: var(--muted); margin-right: 6px; vertical-align: middle;
+  }
+  .dot.ok { background: var(--good); } .dot.err { background: var(--bad); } .dot.warn { background: var(--warn); }
+
+  /* Loader */
+  .loader { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Streaming progress list inside the assistant bubble */
+  .progress { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; margin-bottom: 4px; }
+  .progress .pstep { display: flex; align-items: center; gap: 6px; opacity: 0.5; transition: opacity 0.2s; }
+  .progress .pstep.active { opacity: 1; color: var(--text); }
+  .progress .pstep.done { opacity: 0.9; color: var(--muted); }
+  .progress .pstep .pdot {
+    width: 8px; height: 8px; border-radius: 999px; background: var(--border);
+    display: inline-block;
+  }
+  .progress .pstep.active .pdot {
+    background: var(--accent); animation: pulse 1.1s ease-in-out infinite;
+  }
+  .progress .pstep.done .pdot { background: var(--good); }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50%      { transform: scale(1.35); opacity: 0.5; }
+  }
+  .caret { display: inline-block; width: 7px; height: 14px; background: var(--accent); margin-left: 1px; vertical-align: text-bottom; animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* History sidebar is inline for simplicity */
+  .history-row {
+    padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+    background: var(--bg); font-size: 12.5px;
+  }
+  .history-row:hover { border-color: var(--accent); }
+  .history-row .q { color: var(--text); display: block; }
+  .history-row .s { color: var(--muted); font-family: var(--mono); font-size: 11px; }
+</style>
+</head>
+<body data-theme="dark">
+
+<header>
+  <h1>SQL Query AI Agent <span class="pill" id="schemaPill">Chinook</span></h1>
+  <div class="right">
+    <span class="status" id="status">ready</span>
+    <button id="themeToggle" title="Toggle light/dark">🌓</button>
+  </div>
+</header>
+
+<section id="chat">
+  <div id="messages"></div>
+  <form id="composer">
+    <textarea id="input" placeholder="Ask a question about the database, paste SQL to optimize/debug/explain, or follow up on the last answer…" rows="1"></textarea>
+    <button type="submit" class="send" id="sendBtn">Send</button>
+  </form>
+</section>
+
+<section id="workbench">
+  <div class="tabs">
+    <button class="tab active" data-pane="sql">SQL</button>
+    <button class="tab"        data-pane="results">Results</button>
+    <button class="tab"        data-pane="notes">Notes</button>
+    <button class="tab"        data-pane="history">History</button>
+    <button class="tab"        data-pane="schema">Schema</button>
+  </div>
+  <div class="tabpanes">
+    <div class="pane active" id="pane-sql">
+      <div class="section-header">
+        <h3><span class="dot" id="sqlDot"></span>Latest SQL</h3>
+        <div class="actions">
+          <button id="copySql">Copy</button>
+          <button id="dlSql">Download .sql</button>
+        </div>
+      </div>
+      <pre class="sqlbox"><code class="language-sql" id="sqlCode">—</code></pre>
+      <div class="section-header"><h3>Explanation</h3></div>
+      <div class="notes" id="explanation">—</div>
+    </div>
+
+    <div class="pane" id="pane-results">
+      <div class="section-header">
+        <h3><span class="dot" id="resDot"></span>Query Results</h3>
+        <div class="actions">
+          <span class="status" id="resStatus"></span>
+          <button id="dlCsv">Download CSV</button>
+        </div>
+      </div>
+      <div id="resultsBox" class="empty">Run a query to see results here.</div>
+    </div>
+
+    <div class="pane" id="pane-notes">
+      <div class="section-header"><h3>Validation</h3></div>
+      <div class="notes" id="validationBox">—</div>
+      <div class="section-header"><h3>Optimizer notes</h3></div>
+      <div class="notes" id="optBox">—</div>
+      <div class="section-header"><h3>Suggested indexes</h3></div>
+      <div class="notes" id="idxBox">—</div>
+      <div class="section-header"><h3>Query plan</h3></div>
+      <pre class="sqlbox"><code id="planBox">—</code></pre>
+    </div>
+
+    <div class="pane" id="pane-history">
+      <div class="section-header"><h3>Conversation history (click to restore an SQL)</h3></div>
+      <div id="historyBox" class="empty">No turns yet.</div>
+    </div>
+
+    <div class="pane" id="pane-schema">
+      <div class="section-header"><h3>Chinook schema</h3></div>
+      <div class="schema-tree" id="schemaBox">Loading…</div>
+    </div>
+  </div>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+<script>
+(() => {
+  const API = "";  // same origin
+  const $ = (id) => document.getElementById(id);
+  const messagesEl = $("messages");
+  const inputEl = $("input");
+  const sendBtn = $("sendBtn");
+  const statusEl = $("status");
+
+  // --- state ---
+  const state = {
+    lastSql: null,
+    messages: [],         // {role, content} rolling window
+    history: [],          // {q, sql, response, ts}
+  };
+
+  // --- theme ---
+  const theme = localStorage.getItem("theme") || "dark";
+  document.body.setAttribute("data-theme", theme);
+  $("themeToggle").onclick = () => {
+    const t = document.body.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    document.body.setAttribute("data-theme", t);
+    localStorage.setItem("theme", t);
+  };
+
+  // --- tabs ---
+  document.querySelectorAll(".tab").forEach(t => {
+    t.onclick = () => {
+      document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x === t));
+      document.querySelectorAll(".pane").forEach(p => p.classList.toggle("active", p.id === "pane-" + t.dataset.pane));
+    };
+  });
+
+  // --- textarea autosize ---
+  inputEl.addEventListener("input", () => {
+    inputEl.style.height = "auto";
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 180) + "px";
+  });
+  inputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("composer").requestSubmit(); }
+  });
+
+  // --- helpers ---
+  function addMsg(role, content, meta) {
+    const wrap = document.createElement("div");
+    wrap.className = "msg " + role;
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.textContent = content;
+    wrap.appendChild(bubble);
+    if (meta) {
+      const m = document.createElement("div");
+      m.className = "meta " + (meta.kind || "");
+      m.textContent = meta.text;
+      wrap.appendChild(m);
+    }
+    messagesEl.appendChild(wrap);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return wrap;
+  }
+
+  function setStatus(text, cls) {
+    statusEl.textContent = text;
+    statusEl.className = "status " + (cls || "");
+  }
+
+  function setSql(sql) {
+    const code = $("sqlCode");
+    code.textContent = sql || "—";
+    if (sql) Prism.highlightElement(code);
+    $("sqlDot").className = "dot " + (sql ? "ok" : "");
+  }
+
+  function renderResults(exe) {
+    const box = $("resultsBox");
+    const resDot = $("resDot");
+    const resStatus = $("resStatus");
+    if (!exe || !exe.ok) {
+      box.className = "empty";
+      box.textContent = exe && exe.error ? exe.error : "No execution result.";
+      resDot.className = "dot " + (exe && exe.error ? "err" : "");
+      resStatus.textContent = exe && exe.error ? "error" : "";
+      resStatus.className = "status " + (exe && exe.error ? "err" : "");
+      return;
+    }
+    const t = document.createElement("table");
+    t.className = "results";
+    const thead = document.createElement("tr");
+    exe.columns.forEach(c => { const th = document.createElement("th"); th.textContent = c; thead.appendChild(th); });
+    t.appendChild(thead);
+    exe.rows.forEach(r => {
+      const tr = document.createElement("tr");
+      r.forEach(v => { const td = document.createElement("td"); td.textContent = v === null ? "NULL" : v; tr.appendChild(td); });
+      t.appendChild(tr);
+    });
+    box.className = "";
+    box.innerHTML = "";
+    box.appendChild(t);
+    resDot.className = "dot ok";
+    resStatus.textContent = `${exe.row_count} row${exe.row_count === 1 ? "" : "s"}${exe.truncated ? " (truncated)" : ""}`;
+    resStatus.className = "status ok";
+  }
+
+  function renderNotes(payload) {
+    const v = payload.validation;
+    const vBox = $("validationBox");
+    if (!v) { vBox.textContent = "—"; }
+    else if (v.ok) { vBox.innerHTML = `<span class="dot ok"></span>Passed. Tables: <code>${(v.tables_used||[]).join(", ") || "n/a"}</code>`; }
+    else {
+      vBox.innerHTML = `<span class="dot err"></span>Failed:<ul>${(v.errors||[]).map(e => `<li><code>${e.code}</code> ${e.message}</li>`).join("")}</ul>`;
+    }
+
+    const o = payload.optimization;
+    $("optBox").innerHTML = !o ? "—" :
+      (o.used_fallback
+        ? `<span class="dot warn"></span>Fell back to original (${o.fallback_reason||"n/a"}).`
+        : `<ul>${(o.notes||[]).map(n => `<li>${n}</li>`).join("") || "<li>already optimal</li>"}</ul>`);
+
+    $("idxBox").innerHTML = (o && o.indexes && o.indexes.length)
+      ? `<ul>${o.indexes.map(i => `<li><code>${i}</code></li>`).join("")}</ul>` : "—";
+
+    const plan = payload.execution && payload.execution.plan;
+    $("planBox").textContent = (plan && plan.length) ? plan.join("\n") : "—";
+  }
+
+  function renderHistory() {
+    const box = $("historyBox");
+    if (!state.history.length) { box.className = "empty"; box.textContent = "No turns yet."; return; }
+    box.className = "";
+    box.innerHTML = "";
+    state.history.slice().reverse().forEach((h) => {
+      const row = document.createElement("div");
+      row.className = "history-row";
+      const when = new Date(h.ts).toLocaleTimeString();
+      const badge = h.status === "refused" ? `<span class="pill" style="margin-left:6px;color:var(--warn);">refused</span>`
+                   : h.status === "error"   ? `<span class="pill" style="margin-left:6px;color:var(--bad);">error</span>`
+                   : "";
+      row.innerHTML = `<span class="q">${escapeHtml(h.q)}${badge}</span>` +
+                      (h.sql ? `<span class="s">${escapeHtml(h.sql)}</span>` : "") +
+                      `<span class="s" style="opacity:0.6;">${when}</span>`;
+      row.onclick = () => restoreFromHistory(h);
+      box.appendChild(row);
+    });
+  }
+
+  function restoreFromHistory(h) {
+    setSql(h.sql || "");
+    $("explanation").textContent = h.response || "—";
+    renderResults(h.execution);
+    renderNotes({
+      validation: h.validation,
+      optimization: h.optimization,
+      execution: h.execution,
+    });
+    if (h.sql) state.lastSql = h.sql;
+    // Jump to the SQL tab so the restored view is visible
+    document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x.dataset.pane === "sql"));
+    document.querySelectorAll(".pane").forEach(p => p.classList.toggle("active", p.id === "pane-sql"));
+    setStatus("restored from history", "");
+  }
+
+  function escapeHtml(s) {
+    return (s || "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  // --- schema sidebar ---
+  async function loadSchema() {
+    try {
+      const r = await fetch(API + "/api/schema");
+      const d = await r.json();
+      const box = $("schemaBox");
+      box.innerHTML = "";
+      const relByTable = {};
+      (d.relationships||[]).forEach(rel => {
+        (relByTable[rel.from_table] = relByTable[rel.from_table] || []).push(`${rel.from_col} → ${rel.to_table}.${rel.to_col}`);
+      });
+      Object.entries(d.tables).forEach(([t, cols]) => {
+        const div = document.createElement("div");
+        div.innerHTML = `<span class="tbl">▸ ${t}</span>` +
+          cols.map(c => `<span class="col">${c}</span>`).join("") +
+          ((relByTable[t]||[]).length ? `<div class="fk">↳ ${relByTable[t].join("  ·  ")}</div>` : "");
+        box.appendChild(div);
+      });
+    } catch (e) {
+      $("schemaBox").textContent = "Could not load schema.";
+    }
+  }
+
+  // --- send (streaming) ---
+  async function send(text) {
+    if (!text.trim()) return;
+    addMsg("user", text);
+    state.messages.push({ role: "user", content: text });
+    inputEl.value = ""; inputEl.style.height = "auto";
+    sendBtn.disabled = true;
+    setStatus("thinking", "warn");
+
+    // Build assistant bubble up-front: progress list + streamed text + caret
+    const wrap = document.createElement("div");
+    wrap.className = "msg assistant";
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    const progress = document.createElement("div");
+    progress.className = "progress";
+    const streamText = document.createElement("span");
+    streamText.className = "stream";
+    const caret = document.createElement("span");
+    caret.className = "caret";
+    bubble.appendChild(progress);
+    bubble.appendChild(streamText);
+    bubble.appendChild(caret);
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent = "streaming";
+    wrap.appendChild(bubble); wrap.appendChild(meta);
+    messagesEl.appendChild(wrap);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+
+    const steps = new Map();   // node -> row element
+    function markStep(node, label) {
+      // mark previous active steps as done, add new active step
+      progress.querySelectorAll(".pstep.active").forEach(el => {
+        el.classList.remove("active"); el.classList.add("done");
+      });
+      if (!steps.has(node)) {
+        const row = document.createElement("div");
+        row.className = "pstep active";
+        row.innerHTML = `<span class="pdot"></span><span>${escapeHtml(label || node)}</span>`;
+        progress.appendChild(row);
+        steps.set(node, row);
+      } else {
+        steps.get(node).classList.add("active");
+      }
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+    function finalizeSteps(status) {
+      progress.querySelectorAll(".pstep.active").forEach(el => {
+        el.classList.remove("active"); el.classList.add("done");
+      });
+      // Collapse the step list visually once text starts streaming / finishes
+      if (status !== "clarify" && status !== "refused" && status !== "error") {
+        progress.style.opacity = "0.6";
+      }
+    }
+
+    let finalPayload = null;
+    let streamedAny = false;
+
+    try {
+      const r = await fetch(API + "/api/chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
+        body: JSON.stringify({
+          user_input: text,
+          last_sql: state.lastSql,
+          messages: state.messages.slice(-8),
+        }),
+      });
+      if (!r.ok || !r.body) throw new Error("HTTP " + r.status);
+
+      const reader = r.body.getReader();
+      const dec = new TextDecoder();
+      let buf = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+
+        // Parse SSE blocks separated by \n\n
+        let idx;
+        while ((idx = buf.indexOf("\n\n")) !== -1) {
+          const block = buf.slice(0, idx);
+          buf = buf.slice(idx + 2);
+          const lines = block.split("\n");
+          let ev = "message", dataLines = [];
+          for (const ln of lines) {
+            if (ln.startsWith("event:")) ev = ln.slice(6).trim();
+            else if (ln.startsWith("data:")) dataLines.push(ln.slice(5).trim());
+          }
+          const dataStr = dataLines.join("\n");
+          let data = null;
+          try { data = dataStr ? JSON.parse(dataStr) : null; } catch { data = null; }
+
+          if (ev === "step" && data) {
+            markStep(data.node, data.label);
+            // Live preview: show SQL in the right panel as soon as we have it
+            const update = data.update || {};
+            if (update.generated_sql) setSql(update.generated_sql);
+            if (update.final_sql) setSql(update.final_sql);
+            if (update.execution) renderResults(update.execution);
+          }
+          else if (ev === "text" && data && typeof data.t === "string") {
+            streamedAny = true;
+            streamText.textContent += data.t;
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+          }
+          else if (ev === "done" && data) {
+            finalPayload = data;
+          }
+          else if (ev === "error" && data) {
+            streamText.textContent = (streamText.textContent || "") +
+              (streamedAny ? "\n" : "") + (data.message || "unknown error");
+            meta.className = "meta err"; meta.textContent = "error";
+          }
+        }
+      }
+
+      caret.remove();
+      const d = finalPayload || {};
+      finalizeSteps(d.status);
+
+      // If server sent a refusal/clarification, the "text" words already arrived.
+      // Fall back only if nothing streamed.
+      if (!streamedAny && d.response) streamText.textContent = d.response;
+
+      meta.className = "meta " + (d.status === "refused" ? "warn"
+                                  : d.status === "error" ? "err" : "");
+      meta.textContent = d.status || "ok";
+
+      state.messages.push({ role: "assistant", content: d.response || "" });
+      setSql(d.sql || "");
+      $("explanation").textContent = d.response || "—";
+      renderResults(d.execution);
+      renderNotes(d);
+      if (d.sql && (d.status === "ok" || d.status === "error")) state.lastSql = d.sql;
+
+      state.history.push({
+        q: text,
+        sql: d.sql,
+        response: d.response,
+        status: d.status,
+        execution: d.execution,
+        validation: d.validation,
+        optimization: d.optimization,
+        ts: Date.now(),
+      });
+      renderHistory();
+
+      setStatus(d.status || "ok",
+        d.status === "ok" ? "ok" : (d.status === "refused" ? "warn" : "err"));
+
+    } catch (e) {
+      caret.remove();
+      streamText.textContent = "Request failed: " + e.message;
+      meta.className = "meta err"; meta.textContent = "network error";
+      setStatus("error", "err");
+    } finally {
+      sendBtn.disabled = false;
+      inputEl.focus();
+    }
+  }
+
+  $("composer").addEventListener("submit", (e) => {
+    e.preventDefault();
+    send(inputEl.value);
+  });
+
+  // --- actions ---
+  $("copySql").onclick = async () => {
+    const txt = $("sqlCode").textContent;
+    if (!txt || txt === "—") return;
+    await navigator.clipboard.writeText(txt);
+    const b = $("copySql"); const t = b.textContent; b.textContent = "Copied";
+    setTimeout(() => b.textContent = t, 900);
+  };
+  $("dlSql").onclick = () => {
+    const txt = $("sqlCode").textContent;
+    if (!txt || txt === "—") return;
+    const blob = new Blob([txt], { type: "application/sql" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "query.sql"; a.click();
+  };
+  $("dlCsv").onclick = async () => {
+    const sql = $("sqlCode").textContent;
+    if (!sql || sql === "—") return;
+    try {
+      const r = await fetch(API + "/api/export-csv", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sql, row_cap: 10000 }),
+      });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({ detail: r.statusText }));
+        alert("CSV export failed: " + (typeof d.detail === "string" ? d.detail : JSON.stringify(d.detail)));
+        return;
+      }
+      const text = await r.text();
+      const blob = new Blob([text], { type: "text/csv" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = "results.csv"; a.click();
+    } catch (e) { alert("CSV export failed: " + e.message); }
+  };
+
+  // init
+  loadSchema();
+  addMsg("assistant",
+    "Ask a question about the Chinook database (e.g. “top 5 customers by total invoices”), paste SQL to optimize/debug/explain, or follow up on the previous answer. I only answer SQL and database questions.",
+    { text: "assistant • read-only" });
+})();
+</script>
+</body>
+</html>

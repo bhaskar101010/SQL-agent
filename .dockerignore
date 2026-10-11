@@ -1,0 +1,14 @@
+__pycache__
+*.pyc
+.ipynb_checkpoints
+notebooks
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+.DS_Store
+Reddit automation doc.docx
+*.ipynb
+NarrativePointers.docx
+key_manager.py
