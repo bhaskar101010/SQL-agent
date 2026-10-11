@@ -9,8 +9,8 @@ and strictly refuses anything outside the SQL / database domain.
 
 | | |
 |---|---|
-| **Live app** | https://sql-agent-k8y5.onrender.com  *(free tier — first request after idle may take ~30 s to wake)* |
-| **GitHub repo** | [*Deployed Link*](https://github.com/bhaskar101010/SQL-agent) |
+| **Live app** |  [*Deployed Link*](https://sql-agent-k8y5.onrender.com)  *(free tier — first request after idle may take ~30 s to wake)* |
+| **GitHub repo** | [*Github Link*](https://github.com/bhaskar101010/SQL-agent) |
 | **Demo video** | [*Demo Video*](https://www.loom.com/share/4c0f7de38cc548d4b7c8adaedddbbf6f) |
 | **Framework** | LangGraph |
 | **Backend** | FastAPI |
