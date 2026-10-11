@@ -264,14 +264,15 @@ def route_after_inject(state: AgentState) -> str:
 
 def route_after_validate(state: AgentState) -> str:
     v = state.get("validation")
-    if v and v.ok:
-        # If this came from the user, skip the optimizer (user wanted it as-is);
-        # if generated, run the optimizer.
-        if state.get("user_sql") and not state.get("generated_sql"):
-            # explain path: execute then explain, no optimize
-            return "execute"
-        return "optimize"
-    return "validation_failed"
+    if not (v and v.ok):
+        return "validation_failed"
+    # Route by INTENT, not by presence of fields:
+    # - explain_sql: just execute and explain, don't rewrite the user's query
+    # - everything else (generate_sql, followup, optimize_sql): run the optimizer
+    intent = state.get("intent")
+    if intent and intent.intent == "explain_sql":
+        return "execute"
+    return "optimize"
 
 
 def route_after_debug(state: AgentState) -> str:
