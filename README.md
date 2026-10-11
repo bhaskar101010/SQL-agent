@@ -11,7 +11,7 @@ and strictly refuses anything outside the SQL / database domain.
 |---|---|
 | **Live app** | https://sql-agent-k8y5.onrender.com  *(free tier — first request after idle may take ~30 s to wake)* |
 | **GitHub repo** | https://github.com/bhaskar101010/SQL-agent |
-| **Demo video** | *(link to come)* |
+| **Demo video** | [*(link to come)*](https://www.loom.com/share/4c0f7de38cc548d4b7c8adaedddbbf6f) |
 | **Framework** | LangGraph |
 | **Backend** | FastAPI |
 | **Database** | SQLite — Chinook sample DB (bundled in the repo) |
