@@ -1,4 +1,4 @@
-# SQL Query AI Agent — FDSE Hiring Assignment
+# SQL Query AI Agent 
 
 A task-focused **LangGraph** agent that translates natural language into
 read-only SQL against a provided database schema. It validates every query,
