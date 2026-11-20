@@ -231,7 +231,7 @@ class LLMRouter:
                 Cohort("openrouter",
                        [openrouter_key] if openrouter_key else [],
                        os.getenv("OPENROUTER_CHEAP_MODEL",
-                                 "google/gemini-2.0-flash-exp:free"),
+                                 "meta-llama/llama-3.3-70b-instruct:free"),
                        _call_openrouter,
                        min_interval=openrouter_delay),
             ],
